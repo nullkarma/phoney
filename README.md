@@ -7,13 +7,13 @@ It also allows you to change the MAC address of an interface.
 
 Running `phoney` for the first time, it will initially create the Database after downloading the oui.txt
 
-### Listing OUIs my Manufacturer
+### Listing OUIs by Manufacturer
 
 ```bash
 phoney interface -M Apple -l
 ```
 
-If you run the upper commond without `-l`, the `interface` MAC address will be changed to a random value picked from your `-M` Argument. If there is more than one match, `phoney` will ask you to pick a Manufacturer.
+If you run the upper command without `-l`, the `interface` MAC address will be changed to a random value picked from your `-M` Argument. If there is more than one match, `phoney` will ask you to pick a Manufacturer.
 
 ### Search a Manufacturer by OUI/MAC
 
