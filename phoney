@@ -26,12 +26,14 @@ MAC_PATTERN = re.compile(r'([A-F0-9]{2}:?){6}')
 
 class DBM(object):
     def __init__(self, database):
-        p, f = path.split(database)
-        if not p:
-            db = path.abspath(path.curdir) + '/' + database
-        else:
+        db_path, db_name = path.split(database)
+        if db_path:
+            if not path.exists(db_path):
+                makedirs(db_path)
             db = database
-        #self.database = database.rsplit('.', 1)[0]
+        else:
+            db = path.abspath(path.curdir) + '/' + database
+
         self.database = db.rsplit('.', 1)[0]
 
     def __enter__(self):
@@ -180,14 +182,12 @@ class Phoney(object):
             puts(("{} not found in Database.".format(colored.white(mac))))
 
     def parse(self):
+        if not path.isfile(self.database):
+            self.updatedb()
+
         if self.update_db:
             self.updatedb()
             sys.exit(0)
-        else:
-            if not path.isfile(self.database):
-                if not path.exists(path.split(self.database)[0]):
-                    makedirs(path.split(self.database)[0])
-                self.updatedb()
 
         if self.lookup:
             self.search_ouis()
