@@ -34,7 +34,7 @@ class DBM(object):
         else:
             db = path.abspath(path.curdir) + '/' + database
 
-        self.database = db.rsplit('.', 1)[0]
+        self.database = db
 
     def __enter__(self):
         self.dbm = shelve.open(self.database)
