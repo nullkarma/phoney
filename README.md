@@ -10,35 +10,46 @@ Running `phoney` for the first time, it will initially create the Database after
 ### Listing OUIs by Manufacturer
 
 ```bash
-phoney interface -M Apple -l
+phoney search vendor Apple
 ```
-
-If you run the upper command without `-l`, the `interface` MAC address will be changed to a random value picked from your `-M` Argument. If there is more than one match, `phoney` will ask you to pick a Manufacturer.
 
 ### Search a Manufacturer by OUI/MAC
 
-Argument can be either a list, or a file containing MAC adresses
+Argument can be a whitespace separated list of MAC adresses
 
 ```bash
-phoney interface -o 11:22:33:44:55:66 AA:BB:CC:DD:EE:FF
+phoney search addr 11:22:33:44:55:66 AA:BB:CC:DD:EE:FF
+```
+
+### Setting a manufacturer specific MAC address
+
+```bash
+phoney set <interface> to vendor Samsung
+```
+
+If there is more than one match, phoney will ask you to choose from a list of matched manufacturers.
+
+### Setting a specific MAC address
+
+```bash
+phoney set <interface> to addr FF:FF:FF:FF:FF:FF
 ```
 
 ### Random pick
 
 ```bash
-phoney interface
-```
-
-### Setting a specific MAC address
-
-```bash
-phoney interface -m FF:FF:FF:FF:FF:FF
+phoney set <interface> to random
 ```
 
 ### Database update
 
 ```bash
-phoney interface --update-db
+phoney update
 ```
+
+# Todo
+
+* `phoney search oui` should accect files
+
 
 
