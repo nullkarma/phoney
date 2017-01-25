@@ -1,6 +1,6 @@
 # phoney
 
-`phoney` fetches the frequently released oui.txt by ieee.org and stores the OUIs in a local Berkley Hash DB.
+`phoney` fetches the frequently released oui.txt by ieee.org and `simplejson.dump`'s the parsed file into a another file a.k.a "The Database".
 It also allows you to change the MAC address of an interface.
 
 ## Using phoney
@@ -27,7 +27,7 @@ phoney search addr 11:22:33:44:55:66 AA:BB:CC:DD:EE:FF
 phoney set <interface> to vendor Samsung
 ```
 
-If there is more than one match, phoney will ask you to choose from a list of matched manufacturers.
+If there is more than one match, `phoney` will ask you to choose from a list of matched manufacturers.
 
 ### Setting a specific MAC address
 
