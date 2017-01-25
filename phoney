@@ -9,7 +9,7 @@
     phoney --version
 
     Options:
-        --db=<database>            Database to use [default: oui.db]
+        --db=<database>            Database to use [default: /usr/local/lib/phoney/oui.db]
         --dryrun                   Dry run [default: False]
 """
 
@@ -134,7 +134,7 @@ class Phoney(object):
             sys.exit(1)
 
     def _set_mac(self, macaddr):
-        print colored.white("Current MAC address: " + colored.yellow(self._hwaddr()))
+        print colored.white("Old MAC address: " + colored.yellow(self._hwaddr()))
 
         cmd = "ifconfig {} hw ether {}".format(self.interface, macaddr)
         if self.dryrun:
