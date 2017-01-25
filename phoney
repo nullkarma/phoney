@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-"""Usage:
+"""
+Usage:
     phoney [options] search (vendor|addr) <value>...
     phoney [options] set <interface> to (vendor|addr) <value>...
     phoney [options] set <interface> to random
@@ -35,7 +36,7 @@ VALID_CHARS = 'ABCDEF0123456789'
 OUI_URI = 'http://linuxnet.ca/ieee/oui.txt'
 
 OUI_HEX_PATTERN = re.compile(r'^([0-9A-F-]+)\s+\(hex\)\s+(\w+.*)$')
-MAC_PATTERN = re.compile(r'([A-F0-9]{2}:?){6}')
+MAC_PATTERN = re.compile(r'^([A-F0-9]{2}:?){5}[A-F0-9]{2}$')
 
 
 class Database(object):
@@ -82,7 +83,7 @@ class Database(object):
             try:
                 return self._db[key].pop(self._db[key].index(value))
             except ValueError:
-                print "{} does not exist in db.".format(value)
+                pass
 
     def drop(self, key):
         del self._db[key]
@@ -93,15 +94,6 @@ class Database(object):
                 continue
 
             return k
-
-    def exists(self, key, value=None):
-        if value is None:
-            return True if self._db.get(key, None) is not None else False
-        else:
-            if isinstance(self._db.get(key, None), (list, dict)):
-                return True if value in self._db.get(key, None) else False
-            else:
-                return True if value == self._db.get(key, None) else False
 
 
 class Phoney(object):
@@ -135,8 +127,6 @@ class Phoney(object):
             sys.exit(1)
 
     def _set_mac(self, macaddr):
-        print colored.white("Old MAC address: " + colored.yellow(self._hwaddr()))
-
         if system() == 'Linux':
             cmd = "ifconfig {} hw ether {}".format(self.interface, macaddr)
         elif system() == 'Darwin':
@@ -145,6 +135,7 @@ class Phoney(object):
             print colored.red('Unsupported operating system')
             sys.exit(1)
 
+        print colored.white("Old MAC address: " + colored.yellow(self._hwaddr()))
         if self.dryrun:
             print colored.magenta("Would have run: ") + colored.white(cmd)
         else:
@@ -152,7 +143,7 @@ class Phoney(object):
             if stderr:
                 print stderr
 
-        print colored.white("New MAC address: " + colored.green(macaddr))
+        print colored.white("New MAC address: " + colored.green(macaddr.upper))
 
     def updatedb(self):
         vendors = defaultdict(list)
@@ -173,10 +164,10 @@ class Phoney(object):
         remove(oui_txt)
         print colored.green('Update completed.')
 
-    def validate(self, addrs):
+    def validate_macaddr(self, addrs):
         for addr in addrs:
             if not MAC_PATTERN.match(addr.upper()):
-                print colored.red("{} is not a valid MAC Address".format(addr))
+                print colored.white(addr), colored.red("is not a valid MAC Address")
                 continue
 
             yield addr
@@ -191,7 +182,7 @@ class Phoney(object):
         print colored.magenta("Pretending to be: ") + colored.green(vendor)
 
     def search_oui(self, addrs):
-        ouis = [mac for mac in self.validate(addrs)]
+        ouis = [mac for mac in self.validate_macaddr(addrs)]
         with Database(self._db_path) as db:
             for mac in ouis:
                 oui, nic = mac[:8], mac[9:]
@@ -202,7 +193,7 @@ class Phoney(object):
                     print "{} is {}".format(colored.green(mac), colored.red('Unknown'))
 
     def search_vendor(self, vendor):
-        re_search = re.compile(r'^.*' + vendor + '.*$', re.I)
+        re_search = re.compile(r'^.*' + re.escape(vendor) + '.*$', re.I)
         with Database(self._db_path) as db:
             vendors = [(vendor_name, vendor_ouis) for vendor_name, vendor_ouis in db.iteritems() if re_search.match(vendor_name)]
 
@@ -230,12 +221,13 @@ class Phoney(object):
     def set_vendor_mac(self, vendor):
         self._set_mac(self.random_nic(self.pick_vendor(self.search_vendor(vendor))))
 
-    def set_mac(self, addr):
-        if not MAC_PATTERN.match(addr.upper()):
-            print colored.red("{} is not valid!".format(addr))
+    def set_users_mac(self, addr):
+        try:
+            mac = [m for m in self.validate_macaddr(addr)][0]
+        except IndexError:
             sys.exit(1)
 
-        self._set_mac(addr)
+        self._set_mac(mac)
 
 
 def prettify(content):
@@ -260,7 +252,7 @@ if __name__ == '__main__':
         phoney.set_vendor_mac(' '.join(args['<value>']))
 
     if args['set'] and args['to'] and args['addr']:
-        phoney.set_mac(args['<value>'][0])
+        phoney.set_users_mac(args['<value>'])
 
     if args['set'] and args['to'] and args['random']:
         phoney.random_vendor()
