@@ -3,16 +3,16 @@
 from collections import defaultdict
 from argparse import ArgumentParser
 from random import choice as choose_from
-from clint.textui import progress, puts, colored, indent, prompt
+from clint.textui import progress, colored, indent, prompt
 from tempfile import mktemp
 from os import remove, path, makedirs
 from subprocess import Popen, PIPE
 import re
-import shelve
 import requests
 import sys
 import shlex
 import netifaces
+import simplejson
 
 
 VALID_CHARS = 'ABCDEF0123456789'
@@ -23,25 +23,63 @@ OUI_URI = 'http://linuxnet.ca/ieee/oui.txt'
 OUI_HEX_PATTERN = re.compile(r'^([0-9A-F-]+)\s+\(hex\)\s+(\w+.*)$')
 MAC_PATTERN = re.compile(r'([A-F0-9]{2}:?){6}')
 
-
-class DBM(object):
-    def __init__(self, database):
+class Database(object):
+    def __init__(self, database, flush=True):
+        self._db_path = database
         db_path, db_name = path.split(database)
-        if db_path:
-            if not path.exists(db_path):
-                makedirs(db_path)
-            db = database
-        else:
-            db = path.abspath(path.curdir) + '/' + database
 
-        self.database = db
+        if not path.exists(path.abspath(db_path)):
+            makedirs(db_path)
 
     def __enter__(self):
-        self.dbm = shelve.open(self.database)
-        return self.dbm
+        try:
+            with open(path.abspath(self._db_path), 'rb') as fd:
+                self._db = simplejson.load(fd)
+        except IOError:
+            self._db = dict()
+        return self
 
     def __exit__(self, *args):
-        self.dbm.close()
+        with open(self._db_path, 'wb') as fd:
+            self._db = simplejson.dump(self._db, fd)
+
+    def __iter__(self):
+        return iter(self._db)
+
+    def __getitem__(self, item):
+        return self._db.get(item)
+
+    def __setitem__(self, key, value):
+        self._db[key] = value
+
+    def iteritems(self):
+        for k,v in self._db.iteritems():
+            yield k, v
+
+    def push(self, key, value):
+        self._db[key] = value
+
+    def pop(self, key, value):
+        if isinstance(self._db[key], list):
+            try:
+                return self._db[key].pop(self._db[key].index(value))
+            except ValueError:
+                print "{} does not exist in db.".format(value)
+
+    def drop(self, key):
+        del self._db[key]
+
+    def find(self, value):
+        pass
+
+    def exists(self, key, value=None):
+        if value is None:
+            return True if self._db.get(key, None) is not None else False
+        else:
+            if isinstance(self._db.get(key, None), (list, dict)):
+                return True if value in self._db.get(key, None) else False
+            else:
+                return True if value == self._db.get(key, None) else False
 
 
 class Phoney(object):
@@ -62,21 +100,21 @@ class Phoney(object):
         try:
             return netifaces.ifaddresses(self.interface)[netifaces.AF_LINK][0].get('addr').upper()
         except ValueError, e:
-            puts(colored.red(str(e)))
+            print colored.red(str(e))
             sys.exit(1)
 
     def _set_mac(self, macaddr):
-        puts(colored.white("Current MAC address: " + colored.yellow(self._hwaddr())))
+        print colored.white("Current MAC address: " + colored.yellow(self._hwaddr()))
 
         cmd = "ifconfig {} hw ether {}".format(self.interface, macaddr)
         if self.dryrun:
-            puts(colored.magenta("Would have run: ") + colored.white(cmd))
+            print colored.magenta("Would have run: ") + colored.white(cmd)
         else:
             stdout, stderr = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE).communicate()
             if stderr:
                 print stderr
 
-        puts(colored.white("New MAC address: " + colored.green(macaddr)))
+        print colored.white("New MAC address: " + colored.green(macaddr))
 
     def _download_ouis(self):
         tmpfile = mktemp()
@@ -96,26 +134,25 @@ class Phoney(object):
         vendors = defaultdict(list)
 
         raw_ouifile = self._download_ouis()
-
         with open(raw_ouifile, 'rb') as infile:
             for line in infile:
                 if OUI_HEX_PATTERN.match(line):
                     oui, vendor = OUI_HEX_PATTERN.match(line).groups()
                     vendors[vendor.replace('\r', '')].append(oui.replace('-', ':'))
 
-        with DBM(self.database) as db:
+        with Database(self.database) as db:
             for vendor, ouis in vendors.iteritems():
-                db[vendor] = ouis
+                db.push(vendor, ouis)
 
         remove(raw_ouifile)
-        puts(colored.green('Update completed.'))
+        print colored.green('Update completed.')
 
     def search_vendors(self):
         re_search = re.compile(r'^.*' + self.searchstring + '.*$', re.I)
-        with DBM(self.database) as dbm:
-            vendors = [(vendor, ouis) for vendor, ouis in dbm.iteritems() if re_search.match(vendor)]
+        with Database(self.database) as db:
+            vendors = [(vendor, ouis) for vendor, ouis in db.iteritems() if re_search.match(vendor)]
         if not vendors:
-            puts(colored.red("{} not found.".format(self.searchstring)))
+            print colored.red("{} not found.".format(self.searchstring))
             sys.exit(1)
 
         return vendors
@@ -123,7 +160,7 @@ class Phoney(object):
     def pick_oui(self, vendor_data):
         oui = None
         if len(vendor_data) > 1:
-            puts(colored.green("Found more than one match!"))
+            print colored.green("Found more than one match!")
             # clint foo. Build a menu to choose from.
             options = [{'selector':i, 'prompt': vendor[0], 'return': vendor[0]} for i, vendor in enumerate(vendor_data)]
             choice = prompt.options("Pick a vendor:", options)
@@ -177,9 +214,9 @@ class Phoney(object):
                 continue
 
             hits.append(mac)
-            puts(("{} is {} branded.".format(colored.white(mac), colored.green(vendor_name))))
+            print "{} is {} branded.".format(colored.white(mac), colored.green(vendor_name))
         if mac not in hits:
-            puts(("{} not found in Database.".format(colored.white(mac))))
+            print "{} not found in Database.".format(colored.white(mac))
 
     def parse(self):
         if not path.isfile(self.database):
@@ -208,15 +245,15 @@ class Phoney(object):
             vendor, ouis = choose_from([(v,ouis) for v, ouis in self.search_vendors()])
             mac = self.random_nic(choose_from(ouis))
             self._set_mac(mac)
-            puts(colored.magenta("Pretending to be: ") + colored.green(vendor))
+            print colored.magenta("Pretending to be: ") + colored.green(vendor)
 
 
 def prettify(content):
     for a, b in content:
-        puts(colored.green(a))
+        print colored.green(a)
         with indent(4):
             for i in b:
-                puts(colored.white(i))
+                print colored.white(i)
 
 if __name__ == '__main__':
 
