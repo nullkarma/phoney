@@ -19,6 +19,7 @@ from clint.textui import progress, colored, indent, prompt, puts
 from tempfile import mktemp
 from os import remove, path, makedirs
 from subprocess import Popen, PIPE
+from platform import system
 import re
 import requests
 import sys
@@ -136,7 +137,14 @@ class Phoney(object):
     def _set_mac(self, macaddr):
         print colored.white("Old MAC address: " + colored.yellow(self._hwaddr()))
 
-        cmd = "ifconfig {} hw ether {}".format(self.interface, macaddr)
+        if system() == 'Linux':
+            cmd = "ifconfig {} hw ether {}".format(self.interface, macaddr)
+        elif system() == 'Darwin':
+            cmd = "ifconfig {} ether {}".format(self.interface, macaddr)
+        else:
+            print colored.red('Unsupported operating system')
+            sys.exit(1)
+
         if self.dryrun:
             print colored.magenta("Would have run: ") + colored.white(cmd)
         else:
